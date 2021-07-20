@@ -50,25 +50,25 @@ void count_sort(const T *in, T *out, size_t N, KeyFunc get_key) {
   }
 }
 
-template <typename UINT> void radix_sort_uint(UINT *arr, size_t N) {
+template <typename INT> void radix_sort(INT *arr, size_t N) {
   if (N < 2)
     return;
 
   // Count sort needs an auxiliary array
-  UINT aux[N];
+  INT aux[N];
 
   // Start with the original array as input and the
   // auxiliary array as output.
-  UINT *in = arr, *out = aux;
+  INT *in = arr, *out = aux;
 
   // Use N as the base
-  const UINT base = static_cast<UINT>(N);
+  const INT base = static_cast<INT>(N);
 
   // Iterate till all the digits of the largest number are covered.
-  const UINT max_num = *std::max_element(arr, arr + N);
+  const INT max_num = *std::max_element(arr, arr + N);
   bool reached_msd = false;
-  for (UINT div = 1; !reached_msd; div *= base) {
-    count_sort(in, out, base, [div, base](const UINT &num) -> int {
+  for (INT div = 1; !reached_msd; div *= base) {
+    count_sort(in, out, base, [div, base](const INT &num) -> int {
       return ((num / div) % base);
     });
 
@@ -76,7 +76,7 @@ template <typename UINT> void radix_sort_uint(UINT *arr, size_t N) {
     reached_msd = ((max_num / div) == 0);
 
     // Swap the input and the output arrays for the next iteration.
-    UINT *tmp = in;
+    INT *tmp = in;
     in = out;
     out = tmp;
   }
@@ -89,9 +89,9 @@ template <typename UINT> void radix_sort_uint(UINT *arr, size_t N) {
 }
 
 int main() {
-  int arr[] = {14610, 21312, 16489, 200, 5093, 30301, 1999};
+  long arr[] = {14610, 21312, 16489, 200, 5093, 30301, 1999};
   constexpr size_t N = sizeof(arr) / sizeof(arr[0]);
-  radix_sort_uint(arr, N);
+  radix_sort(arr, N);
 
   for (const auto &i : arr)
     std::cout << i << " ";
