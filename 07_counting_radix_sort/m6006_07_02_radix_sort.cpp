@@ -6,10 +6,10 @@
 // in the file LICENSE in the source distribution.
 //
 
+#include <algorithm>
 #include <cstring>
 #include <functional>
 #include <iostream>
-#include <string>
 
 // Count Sort:
 // Sorts the N elements in 'in' and place the sorted result
@@ -50,29 +50,51 @@ void count_sort(const T *in, T *out, size_t N, KeyFunc get_key) {
   }
 }
 
-// A key-value pair.
-typedef std::pair<int, std::string> kv_t;
+template <typename UINT> void radix_sort_uint(UINT *arr, size_t N) {
+  if (N < 2)
+    return;
 
-// Extract key from a key-value pair.
-int kv_key(const kv_t &kv) { return kv.first; }
+  // Count sort needs an auxiliary array
+  UINT aux[N];
+
+  // Start with the original array as input and the
+  // auxiliary array as output.
+  UINT *in = arr, *out = aux;
+
+  // Use N as the base
+  const UINT base = static_cast<UINT>(N);
+
+  // Iterate till all the digits of the largest number are covered.
+  const UINT max_num = *std::max_element(arr, arr + N);
+  bool reached_msd = false;
+  for (UINT div = 1; !reached_msd; div *= base) {
+    count_sort(in, out, base, [div, base](const UINT &num) -> int {
+      return ((num / div) % base);
+    });
+
+    // Check if MSD is reached.
+    reached_msd = ((max_num / div) == 0);
+
+    // Swap the input and the output arrays for the next iteration.
+    UINT *tmp = in;
+    in = out;
+    out = tmp;
+  }
+
+  // Copy output back to the original array if necessary
+  if (out != arr) {
+    for (size_t i = 0; i < N; ++i)
+      arr[i] = out[i];
+  }
+}
 
 int main() {
-  // Input: Unsoreted key-value pairs.
-  kv_t arr[] = {{10, "ten"}, {6, "six"}, {5, "five"}, {6, "VI"}, {4, "four"}};
-
-  std::cout << "Input:" << std::endl;
-  for (const auto &p : arr)
-    std::cout << "(" << p.first << ", " << p.second << "), ";
-  std::cout << std::endl;
-
+  int arr[] = {14610, 21312, 16489, 200, 5093, 30301, 1999};
   constexpr size_t N = sizeof(arr) / sizeof(arr[0]);
-  kv_t sorted_arr[N];
-  count_sort(arr, sorted_arr, N, kv_key);
+  radix_sort_uint(arr, N);
 
-  // Output: Stable sorted key-value pairs.
-  std::cout << "Output:" << std::endl;
-  for (const auto &p : sorted_arr)
-    std::cout << "(" << p.first << ", " << p.second << "), ";
+  for (const auto &i : arr)
+    std::cout << i << " ";
   std::cout << std::endl;
 
   return 0;
