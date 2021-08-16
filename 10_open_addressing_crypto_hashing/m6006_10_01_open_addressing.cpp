@@ -178,6 +178,34 @@ protected:
   HashFunction &hFunc;
 };
 
+class DoubleHashFunction : public ProbingHashFunction {
+public:
+  explicit DoubleHashFunction(uint32_t m, HashFunction &hf1, HashFunction &hf2)
+      : ProbingHashFunction(m), hFunc1(hf1), hFunc2(hf2) {
+    hFunc1.UpdateHashSize(m);
+    hFunc2.UpdateHashSize(m);
+  }
+
+  virtual uint32_t operator()(uint32_t key, uint32_t trial_no) const override {
+    // To ensure (trial_no * x) % M is a permutation of {0, 1, ..., M -1} for
+    // x = {0, 1, ..., M - 1}; x and M should be relatively prime to each
+    // other. In this case M is a power of 2 and x is odd.
+    return (hFunc1(key) + trial_no * Oddify(hFunc2(key))) % M;
+  }
+
+protected:
+  virtual void OnHashSizeChange() override {
+    hFunc1.UpdateHashSize(M);
+    hFunc2.UpdateHashSize(M);
+  }
+
+  static uint32_t Oddify(uint32_t val) { return (val | 1); }
+
+  HashFunction &hFunc1;
+
+  HashFunction &hFunc2;
+};
+
 // Implements hashing with open addressing
 class HashTable {
 protected:
@@ -349,6 +377,14 @@ void run_test(const char *msg, uint32_t *nums, uint32_t N,
     run_test(#PHF " % " #HF, nums, N, phf);                                    \
   } while (0)
 
+#define RUN_HASH_TEST2(HF1, HF2, PHF, nums, N)                                 \
+  do {                                                                         \
+    HF1 hf1(N);                                                                \
+    HF1 hf2(N);                                                                \
+    PHF phf(N, hf1, hf2);                                                      \
+    run_test(#PHF " % " #HF1 " % " #HF2, nums, N, phf);                        \
+  } while (0)
+
 int main() {
   const uint32_t N = 1000000; // A Million
   srand(A_BIG_PRIME_NUMBER);
@@ -359,6 +395,8 @@ int main() {
   RUN_HASH_TEST(DivisionHashFunction, LinearProbingHashFunction, nums, N);
   RUN_HASH_TEST(MultiplicationHashFunction, LinearProbingHashFunction, nums, N);
   RUN_HASH_TEST(UniversalHashFunction, LinearProbingHashFunction, nums, N);
+
+  RUN_HASH_TEST2(UniversalHashFunction, MultiplicationHashFunction, DoubleHashFunction, nums, N);
 
   return 0;
 }
