@@ -54,7 +54,7 @@ void populate_catalan_numbers_method2(catalan_t *memo, size_t N) {
   }
 }
 
-// C_n = 2C_{n-1} (2n - 1)/(n + 1) 
+// C_n = 2C_{n-1} (2n - 1)/(n + 1)
 void populate_catalan_numbers_method3(catalan_t *memo, size_t N) {
   memo[0] = 1;
 
@@ -101,4 +101,3 @@ int main() {
 
   return 0;
 }
-
