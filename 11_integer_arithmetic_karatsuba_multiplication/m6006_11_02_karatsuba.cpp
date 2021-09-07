@@ -174,11 +174,6 @@ magnitude_t operator+(const magnitude_t &lhs, const magnitude_t &rhs) {
 // Diff: Subtracts rhs from lhs.
 // Beware: lhs is assumed to be greater than or equal to rhs.
 magnitude_t operator-(const magnitude_t &lhs, const magnitude_t &rhs) {
-#if 0
-                const auto cmp = compare(m1, m2);
-                const auto& lhs = (cmp > 0) ? m1 : m2;
-                const auto& rhs = (cmp > 0) ? m2 : m1;
-#endif
   const auto mag_size = std::max(lhs.size(), rhs.size());
 
   magnitude_t res;
@@ -382,6 +377,28 @@ private:
 
   magn::magnitude_t mMagnitude;
 
+  static sign_t flip(sign_t s) { return (s == POSITIVE) ? NEGATIVE : POSITIVE; }
+
+  large_num_t add_sub(const large_num_t &rhs, bool add) const {
+    large_num_t res;
+    const sign_t rsign = (add) ? rhs.mSign : flip(rhs.mSign);
+    if (mSign == rsign) {
+      using magn::operator+;
+      auto mres = this->mMagnitude + rhs.mMagnitude;
+      res.mMagnitude.swap(mres);
+      res.mSign = mSign;
+    } else {
+      const auto cmp = magn::compare(mMagnitude, rhs.mMagnitude);
+      const auto &ll = (cmp > 0) ? *this : rhs;
+      const auto &rr = (cmp > 0) ? rhs : *this;
+      using magn::operator-;
+      auto mres = ll.mMagnitude - rr.mMagnitude;
+      res.mMagnitude.swap(mres);
+      res.mSign = (cmp > 0) ? mSign : rsign;
+    }
+    return res;
+  }
+
 public:
   large_num_t() : mSign(POSITIVE) {}
 
@@ -410,22 +427,12 @@ public:
     return (mSign == NEGATIVE) ? -val : val;
   }
 
-  // TODO: Handle sign
   large_num_t operator+(const large_num_t &rhs) const {
-    large_num_t res;
-    using magn::operator+;
-    auto mres = this->mMagnitude + rhs.mMagnitude;
-    res.mMagnitude.swap(mres);
-    return res;
+    return add_sub(rhs, true);
   }
 
-  // TODO: Handle sign
   large_num_t operator-(const large_num_t &rhs) const {
-    large_num_t res;
-    using magn::operator-;
-    auto mres = this->mMagnitude - rhs.mMagnitude;
-    res.mMagnitude.swap(mres);
-    return res;
+    return add_sub(rhs, false);
   }
 
   large_num_t operator*(const large_num_t &rhs) const {
