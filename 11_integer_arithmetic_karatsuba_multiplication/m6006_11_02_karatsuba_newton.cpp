@@ -443,6 +443,60 @@ public:
     res.mSign = (mSign == rhs.mSign) ? POSITIVE : NEGATIVE;
     return res;
   }
+
+  // Division using Newton's method.
+  // No division operator provided for magnitude_t.
+  // Implement division using multiplication, addition and subtraction.
+  large_num_t operator/(const large_num_t &rhs) const {
+    if (magn::compare(this->mMagnitude, rhs.mMagnitude) < 0) {
+      // Denominator greater than numerator. Return 0.
+      return large_num_t();
+    }
+
+    // First, calculate R/denominator with enough words of precision.
+    // Digits of precision numerator.size() + denominator.size() + 1.
+    // R = base ^ (numerator.size() + denominator.size() + 1).
+    // Initial guess:
+    //    MSD = MSD(R) / MSD(denominator).
+    //    Num words = size(R) - denominator.size() = numerator.size() + 1.
+    magn::double_word_t denom = rhs.mMagnitude[rhs.size() - 1];
+    magn::double_word_t numer = magn::double_word_t(1) << magn::BITS_PER_WORD;
+    large_num_t x(numer / denom);
+    const auto shift = size() + rhs.size() + 1;
+    using magn::operator<<;
+    x.mMagnitude << (size() + 1);
+
+    using magn::operator>>;
+
+    // Refine:
+    // f(x) = 1/x - rhs/R
+    // f'(x) = -1/x^2
+    // x2 = x - f(x)/f'(x)
+    //    = 2x - (rhs * x^2)/R
+    bool converged = false;
+    while (!converged) {
+      // y = (rhs * x^2)/R
+      large_num_t y = rhs * x * x;
+      y.mMagnitude >> shift;
+
+      large_num_t x2 = (large_num_t(2) * x) - y;
+
+      // No refinement after convergence.
+      if (magn::compare(x.mMagnitude, x2.mMagnitude) == 0) {
+        converged = true;
+      } else {
+        x = x2;
+      }
+    }
+
+    // Converged: Now calculate numerator * (R/denominator)
+    large_num_t res = x * (*this);
+    // Finally, divide by R to obtain numerator/denominator
+    res.mMagnitude >> shift;
+    res.mSign = (mSign == rhs.mSign) ? POSITIVE : NEGATIVE;
+
+    return res;
+  }
 };
 
 std::ostream &operator<<(std::ostream &os, const large_num_t &num) {
@@ -455,8 +509,9 @@ std::ostream &operator<<(std::ostream &os, const large_num_t &num) {
 }
 
 int main() {
-  // Multiply a few random numbers.
   srand(time(0));
+
+  // Multiply a few random numbers.
   for (auto i = 0; i < 1000; ++i) {
     intmax_t vm1 = rand();
     intmax_t vm2 = rand();
@@ -476,12 +531,42 @@ int main() {
     }
   }
 
+  // Divide a few random numbers.
+  for (auto i = 0; i < 1000; ++i) {
+    intmax_t v1 = rand();
+    intmax_t v2 = rand();
+    intmax_t vm1 = std::max(v1, v2);
+    intmax_t vm2 = std::min(v1, v2);
+    intmax_t vm = vm1 / vm2;
+    large_num_t m1(vm1);
+    large_num_t m2(vm2);
+    large_num_t m = (m1 / m2);
+    if (m.to_int() != vm) {
+      std::cout << i << ": " << m1 << " / " << m2 << " = " << m << std::endl;
+      std::cout << std::hex << std::endl
+                << "FAIL: " << m << " != " << vm << std::dec << std::endl;
+      std::cout << "vm1: " << vm1 << " vm2: " << vm2 << std::endl;
+      std::cout << m.to_int() << " != " << vm << std::endl;
+      break;
+    } else {
+      std::cout << i << ": " << m1 << " / " << m2 << " = " << m << std::endl;
+    }
+  }
+
   // Multiply a couple of very big numbers.
   large_num_t n1("111111111111111111111111111111111111111111111111");
   large_num_t n2("123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0");
+  large_num_t n3 = n1 * n2;
 
   std::cout << std::endl << n1 << " X " << n2 << " = " << std::endl;
-  std::cout << n1 * n2 << std::endl;
+  std::cout << n3 << std::endl;
+
+  // Division using very big numbers.
+  std::cout << std::endl << n3 << " / " << n2 << " = " << std::endl;
+  std::cout << n3 / n2 << std::endl;
+
+  std::cout << std::endl << n3 << " / " << n1 << " = " << std::endl;
+  std::cout << n3 / n1 << std::endl;
 
   return 0;
 }
