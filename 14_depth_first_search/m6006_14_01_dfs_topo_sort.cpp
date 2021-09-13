@@ -52,6 +52,8 @@ public:
       return (mParents.find(v) != mParents.end());
     }
 
+    virtual bool is_done() const { return false; }
+
     virtual ~explorer() {}
   };
 
@@ -61,6 +63,44 @@ private:
 
   // The adjacency list.
   adj_list_t mAdjList;
+
+  // BFS
+  void bfs_visit(const vertex_t &s, explorer &exp) const {
+
+    exp.component_exploration_start(s);
+    std::list<vertex_t> frontier;
+
+    // Start BFS with start node.
+    frontier.push_back(s);
+
+    // BFS loop.
+    while (!frontier.empty()) {
+      auto u = frontier.front();
+      frontier.pop_front();
+
+      exp.exploration_start(u);
+
+      // Reached end?
+      if (exp.is_done()) {
+        break;
+      }
+
+      const auto i = mAdjList.find(u);
+      if (i != mAdjList.end()) {
+        for (const auto &v : i->second) {
+          if (!exp.is_visited(v)) {
+            exp.edge_followed(u, v);
+            frontier.push_back(v);
+          } else {
+            exp.edge_ignored(u, v);
+          }
+        }
+      }
+
+      exp.exploration_finish(u);
+    }
+    exp.component_exploration_finish(s);
+  }
 
   // DFS recursive call.
   void dfs_visit(const vertex_t &s, explorer &exp) const {
@@ -148,6 +188,45 @@ private:
     }
   };
 
+  // Functionalities implemented on top of BFS.
+
+  // Finds the shortest path between a pair of vertices.
+  class bfs_shortest_path_finder : public explorer {
+
+  private:
+    bool mReachedDst;
+
+    const vertex_t &mSrc;
+
+    const vertex_t &mDst;
+
+  public:
+    bfs_shortest_path_finder(const vertex_t &src, const vertex_t &dst)
+        : mReachedDst(false), mSrc(src), mDst(dst) {}
+
+    virtual void exploration_start(const vertex_t &v) override {
+      // Continue BFS till destination vertex is reached.
+      if (v == mDst)
+        mReachedDst = true;
+    }
+
+    virtual bool is_done() const override { return mReachedDst; }
+
+    void get_shortest_path(vertex_list_t &path) const {
+      auto i = mParents.find(mDst);
+      if (i == mParents.end())
+        return;
+
+      // Follow the parents from destination till source.
+      while (i->first != mSrc) {
+        path.push_front(i->first); // Build the path from back to front.
+        i = mParents.find(i->second);
+      }
+
+      path.push_front(mSrc);
+    }
+  };
+
 public:
   Graph(directionality_t d) : mDir(d) {}
 
@@ -188,6 +267,13 @@ public:
     dfs_topo_sorter dts(topo);
     dfs(dts);
     return true;
+  }
+
+  void find_shortest_path(const vertex_t &src, const vertex_t &dst,
+                          vertex_list_t &path) const {
+    bfs_shortest_path_finder bspf(src, dst);
+    bfs_visit(src, bspf);
+    bspf.get_shortest_path(path);
   }
 
   friend std::ostream &operator<<(std::ostream &os, const Graph &g);
@@ -231,6 +317,16 @@ int main() {
   g.topo_sort(topo);
   std::cout << "Topo-sort: ";
   for (const auto &v : topo)
+    std::cout << v << " ";
+  std::cout << std::endl;
+
+  // Finding shortest path
+  Graph::vertex_t src = "A";
+  Graph::vertex_t dst = "F";
+  Graph::vertex_list_t path;
+  g.find_shortest_path(src, dst, path);
+  std::cout << "Shortest Path from " << src << " to " << dst << " : ";
+  for (const auto &v : path)
     std::cout << v << " ";
   std::cout << std::endl;
 
