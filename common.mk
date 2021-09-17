@@ -21,6 +21,7 @@ CXXFLAGS := $(CXXFLAGS) \
 TOPTARGETS := all clean format
 
 SRCS = $(wildcard *.cpp)
+HDRS = $(wildcard *.hpp)
 
 EXECS = $(SRCS:.cpp=.out )
 
@@ -30,7 +31,7 @@ clean:
 	rm -f *.out *.ii
 
 format:
-	for srcfile in $(SRCS) ; do $(CXXFORMAT) -i $${srcfile} ; done
+	for srcfile in $(SRCS) $(HDRS) ; do $(CXXFORMAT) -i $${srcfile} ; done
 
 .PHONY: $(TOPTARGETS)
 
