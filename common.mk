@@ -9,6 +9,7 @@
 CXXFORMAT = clang-format
 
 CXXFLAGS := $(CXXFLAGS) \
+    -I ../util \
 	-Wall -Wextra -Werror \
 	-Wmissing-include-dirs -Wshadow \
 	-Wunreachable-code -Wredundant-decls \
