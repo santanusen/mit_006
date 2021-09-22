@@ -8,17 +8,23 @@
 
 #include <cstdint>
 #include <iostream>
+#include <list>
+#include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class RubiksCube {
 
 public:
   enum move_type_t { FC, FCC, DC, DCC, LC, LCC, NUMMOVES };
+  typedef std::list<move_type_t> move_sequence_t;
 
 private:
   static const size_t NUMSLOTS = 24;
 
+  // NUMSLOTS slots in the skeletal cube to hold the facelets of the plastic
+  // cube.
   typedef uint16_t facelet_id_t;
   facelet_id_t mSlots[NUMSLOTS];
 
@@ -31,6 +37,11 @@ private:
     return (x << 2 | y << 1 | z) * 3 + f;
   }
 
+  // Convert slot number for a facelet to a string.
+  // The cubelet is identified by the x-y-z coordinates.
+  // The facelet of the cubelet is identified by placing the facing coordinate
+  // within bracket, e.g. FR(U) is the upward facing face of the cubelet at
+  // Fron-Right-Up coordinates.
   static std::string get_slot_str(size_t slot) {
     const auto s = slot / 3;
     std::string str[] = {(((s >> 2) & 0x1) ? "B" : "F"),
@@ -42,8 +53,11 @@ private:
   }
 
   enum color_t { R, G, B, C, M, Y }; // 6 colors for 6 faces.
+  // Encode colors into a facelet identifier. The first color is the
+  // color of the facelet, the other two are the colors of the attached
+  // facelets part of the same cubelet.
   static facelet_id_t get_facelet_id(color_t c1, color_t c2, color_t c3) {
-    return (c1 << 6 | c2 << 3 | c3);
+    return (c1 << 6 | c2 << 3 | c3); // 3-bits to store a color.
   }
 
   // Extract the primary color from the facelet-id.
@@ -51,7 +65,10 @@ private:
     return static_cast<color_t>((f >> 6) & 0x7);
   }
 
-  static std::string get_cubelet_str(facelet_id_t cid) {
+  // String showing the 3 colors of a facelet identifier, starting with the
+  // color of the facelet followed by the colors of the attached facelets
+  // of the host cubelet.
+  static std::string get_facelet_str(facelet_id_t cid) {
     auto get_color_str = [](int c) -> std::string {
       switch (c) {
       case R:
@@ -76,6 +93,16 @@ private:
            get_color_str(cid & 0x7);
   }
 
+#ifdef USE_STR_HASH
+  std::string to_string() const {
+    std::string res;
+    for (size_t slot = 0; slot < RubiksCube::NUMSLOTS; ++slot)
+      res += (get_facelet_str(mSlots[slot]));
+    return res;
+  }
+#endif
+
+  // After applying move x, the facelet at slot i ends up at slot Move[x][i].
   static size_t Move[NUMMOVES][NUMSLOTS];
 
   static void init_moves() {
@@ -86,6 +113,11 @@ private:
       for (auto j = 0U; j < NUMSLOTS; ++j)
         Move[i][j] = j;
 
+    // After applying a move, the cubelet c at x-y-z coordinates identified by
+    // (cubelet_from[c][0], cubelet_from[c][1], cubelet_from[c][2]) ends up at
+    // (cubelet_to[c][0], cubelet_to[c][1], cubelet_to[c][2]).
+    // The facelet that was facing x, y or z end up facing facelett[0],
+    // facelett[1] or facelett[2].
     auto populate_move = [](move_type_t mv, size_t cubelet_from[4][3],
                             size_t cubelet_to[4][3], size_t facelet_from[3],
                             size_t facelet_to[3]) {
@@ -157,10 +189,42 @@ private:
     }
   }
 
+#ifdef USE_STR_HASH
+  // Slow, but works.
+  struct RubiksCubeHash {
+    size_t operator()(const RubiksCube &rc) const {
+      return std::hash<std::string>{}(rc.to_string());
+    }
+  };
+#else
+
+  struct RubiksCubeHash {
+    // Simplified adaptation of Karp-Rabin.
+    size_t operator()(const RubiksCube &rc) const {
+      size_t hash = 0;
+      for (auto i = 0U; i < NUMSLOTS; ++i) {
+        hash = (hash * 0xFFF + rc.mSlots[i]);
+      }
+      return hash;
+    }
+  };
+
+#endif
+
+  struct RubiksCubeEqual {
+    bool operator()(const RubiksCube &lhs, const RubiksCube &rhs) const {
+      for (auto i = 0U; i < NUMSLOTS; ++i)
+        if (lhs.mSlots[i] != rhs.mSlots[i])
+          return false;
+      return true;
+    }
+  };
+
 public:
   RubiksCube() {
     init_moves();
 
+    // Brand new cube with the same color on the facelets on the same side.
     const color_t face_color[][2] = {
         {R, G}, // X-Face colors
         {B, C}, // Y-Face colors
@@ -208,15 +272,58 @@ public:
     return true;
   }
 
+  // Search for a solution using BFS.
+  void get_solution(move_sequence_t &solution) const {
+    std::list<RubiksCube> frontier;
+    std::unordered_map<RubiksCube, std::pair<RubiksCube, move_type_t>,
+                       RubiksCubeHash, RubiksCubeEqual>
+        parents;
+
+    // Start BFS with start node.
+    frontier.push_back(*this);
+    parents[*this] = std::make_pair(*this, NUMMOVES);
+    auto dst_itr = parents.end();
+
+    // BFS loop.
+    while (!frontier.empty()) {
+      auto u = frontier.front();
+      frontier.pop_front();
+
+      // Reached destination?
+      if (u.is_solved()) {
+        dst_itr = parents.find(u);
+        break;
+      }
+
+      for (auto m = 0; m < NUMMOVES; ++m) {
+        auto v = u;
+        auto move = static_cast<move_type_t>(m);
+        v.apply_move(move);
+        if (parents.find(v) == parents.end()) { // Not visited
+          parents[v] = std::make_pair(u, move);
+          frontier.push_back(v);
+        }
+      }
+    }
+
+    // Construct solution following parent links.
+    const RubiksCubeEqual rc_equal;
+    while (dst_itr != parents.end() && !rc_equal(dst_itr->first, *this)) {
+      solution.push_front(dst_itr->second.second);
+      dst_itr = parents.find(dst_itr->second.first);
+    }
+  }
+
   friend std::ostream &operator<<(std::ostream &os, const RubiksCube &rc);
+
 };
 
-size_t RubiksCube::Move[NUMMOVES][NUMSLOTS] = {0};
+size_t RubiksCube::Move[NUMMOVES][NUMSLOTS] = {{0}};
 
 std::ostream &operator<<(std::ostream &os, const RubiksCube &rc) {
   for (size_t slot = 0; slot < RubiksCube::NUMSLOTS; ++slot) {
     os << "[" << RubiksCube::get_slot_str(slot)
-       << "] = " << RubiksCube::get_cubelet_str(rc.mSlots[slot]) << std::endl;
+       << "] = " << RubiksCube::get_facelet_str(rc.mSlots[slot]) << std::endl;
   }
   os << ((rc.is_solved()) ? "SOLVED" : "UNSOLVED") << std::endl;
   return os;
@@ -224,6 +331,7 @@ std::ostream &operator<<(std::ostream &os, const RubiksCube &rc) {
 
 // Let a monkey play with the cube.
 size_t monkey_play(RubiksCube &r) {
+  srand(time(0));
   const size_t nmoves = random() % 200;
   for (auto i = 0U; i < nmoves; ++i) {
     const RubiksCube::move_type_t move =
@@ -236,8 +344,17 @@ size_t monkey_play(RubiksCube &r) {
 
 int main() {
   RubiksCube r;
-  std::cout << r << std::endl;
+  std::cout << "Initial cube:" << std::endl << r << std::endl;
   monkey_play(r);
-  std::cout << r << std::endl;
+  std::cout << "Jumbled up cube:" << std::endl << r << std::endl;
+
+  RubiksCube::move_sequence_t solution;
+  r.get_solution(solution);
+  for (const auto &m : solution)
+    r.apply_move(m);
+  std::cout << "Solved cube:" << std::endl << r << std::endl;
+  std::cout << "Moves to Solve:" << solution.size() << std::endl;
+
+
   return 0;
 }
