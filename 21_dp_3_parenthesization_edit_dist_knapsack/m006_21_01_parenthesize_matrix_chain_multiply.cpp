@@ -71,7 +71,7 @@ std::string dp_matrix_chain_mult_order(const size_t *dimension, size_t N) {
 
 int main() {
 
-  constexpr size_t N = 10;  // Number of matrices.
+  constexpr size_t N = 10; // Number of matrices.
   size_t dimension[N + 1]; // Matrix A_n is of dimension[n] X dimension[n + 1]
 
   // Create a list of random numbers.
